@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>단체티 사이즈 조사</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+/* =========================================================
+   단체티 사이즈 조사 — 단일 index.html (GitHub Pages 배포용)
+   ========================================================= */
+:root{
+  --bg:#f4f6fb; --card:#ffffff; --ink:#1b2336; --sub:#6b7489; --line:#e3e7f0;
+  --main:#2f5bea; --main-soft:#e8eefe; --ok:#17a673; --warn:#e5484d;
+  --shadow:0 10px 30px rgba(27,35,54,.08);
+  --r:18px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg)}
+body{font-family:Pretendard,'Malgun Gothic',system-ui,sans-serif;color:var(--ink);min-height:100vh;-webkit-font-smoothing:antialiased}
+button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit}
+input{font-family:inherit}
+.wrap{max-width:560px;margin:0 auto;padding:24px 16px 60px}
+.wrap.wide{max-width:1100px}
+
+/* 헤더 */
+.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:15px;color:var(--sub)}
+.brand svg{width:30px;height:30px}
+.admin-btn{font-size:13px;color:var(--sub);padding:8px 12px;border-radius:10px}
+.admin-btn:hover{background:#e9ecf4}
+
+/* 진행 표시 */
+.steps{display:flex;gap:6px;margin-bottom:18px}
+.steps i{flex:1;height:6px;border-radius:6px;background:var(--line);overflow:hidden;position:relative}
+.steps i::after{content:"";position:absolute;inset:0;background:var(--main);transform:scaleX(0);transform-origin:left;transition:transform .45s cubic-bezier(.2,.8,.2,1)}
+.steps i.on::after{transform:scaleX(1)}
+
+.card{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);padding:28px 22px}
+h1{font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1.35}
+.lead{color:var(--sub);font-size:15px;margin-top:6px;line-height:1.55}
+
+/* 화면 전환 모션 */
+.screen{display:none}
+.screen.show{display:block;animation:rise .45s cubic-bezier(.2,.8,.2,1)}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+/* 입력 */
+.field{margin-top:22px;transition:opacity .3s}
+.field.locked{opacity:.35;pointer-events:none}
+.label{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;margin-bottom:10px}
+.num{width:22px;height:22px;border-radius:50%;background:var(--line);color:var(--sub);font-size:12px;display:grid;place-items:center;transition:.3s}
+.field.done .num{background:var(--main);color:#fff}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.seg button{height:54px;border-radius:14px;border:2px solid var(--line);font-size:17px;font-weight:700;transition:.2s}
+.seg button:hover{border-color:#c7d1ea}
+.seg button.sel{border-color:var(--main);background:var(--main-soft);color:var(--main)}
+.inp{width:100%;height:54px;border-radius:14px;border:2px solid var(--line);padding:0 16px;font-size:17px;outline:none;transition:.2s;background:#fff}
+.inp:focus{border-color:var(--main)}
+.inp.bad{border-color:var(--warn)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.hint{font-size:13px;color:var(--warn);margin-top:6px;min-height:18px}
+
+/* 사이즈 선택 */
+.sizes{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px;margin-top:22px}
+.size{position:relative;border:2px solid var(--line);border-radius:16px;padding:16px 8px 12px;text-align:center;transition:transform .15s,border-color .2s,background .2s;background:#fff}
+.size:hover{border-color:#c7d1ea;transform:translateY(-2px)}
+.size:active{transform:scale(.97)}
+.size svg{width:100%;height:auto;display:block;margin:0 auto 8px;transition:transform .3s cubic-bezier(.2,.8,.2,1)}
+.size b{font-size:20px;font-weight:800;display:block}
+.size small{font-size:12px;color:var(--sub)}
+.size.sel{border-color:var(--main);background:var(--main-soft)}
+.size.sel svg{transform:scale(1.06) rotate(-3deg)}
+.size.sel b{color:var(--main)}
+.size .chk{position:absolute;top:8px;right:8px;width:22px;height:22px;border-radius:50%;background:var(--main);color:#fff;display:grid;place-items:center;font-size:13px;transform:scale(0);transition:transform .25s cubic-bezier(.3,1.6,.5,1)}
+.size.sel .chk{transform:scale(1)}
+
+/* 버튼 */
+.actions{display:flex;gap:10px;margin-top:26px}
+.btn{flex:1;height:56px;border-radius:16px;font-size:17px;font-weight:800;transition:.2s}
+.btn.pri{background:var(--main);color:#fff;box-shadow:0 8px 18px rgba(47,91,234,.28)}
+.btn.pri:disabled{background:#c6cddd;box-shadow:none;cursor:not-allowed}
+.btn.ghost{background:#eef1f7;color:var(--sub);flex:.45}
+.btn.sm{height:40px;font-size:14px;border-radius:12px;padding:0 14px;flex:none}
+
+/* 확인 */
+.confirm{margin-top:20px;border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.confirm div{display:flex;justify-content:space-between;padding:14px 18px;font-size:16px}
+.confirm div+div{border-top:1px solid var(--line)}
+.confirm span{color:var(--sub)}
+.confirm strong.big{font-size:22px;color:var(--main)}
+
+/* 완료 */
+.done-wrap{text-align:center;padding:10px 0}
+.done-wrap svg.shirt{width:150px;margin:6px auto 14px;display:block;animation:pop .7s cubic-bezier(.3,1.5,.5,1)}
+@keyframes pop{0%{transform:scale(.3) rotate(-20deg);opacity:0}100%{transform:none;opacity:1}}
+.confetti{position:fixed;inset:0;pointer-events:none;z-index:50}
+
+.note{font-size:13px;color:var(--sub);margin-top:16px;line-height:1.6;text-align:center}
+.mode-badge{display:inline-block;font-size:11px;padding:3px 8px;border-radius:20px;background:#fff4dc;color:#a36a00;margin-left:6px;font-weight:700}
+
+/* 토스트 */
+.toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,40px);opacity:0;background:#1b2336;color:#fff;padding:12px 18px;border-radius:12px;font-size:14px;transition:.3s;z-index:60;max-width:90vw}
+.toast.show{transform:translate(-50%,0);opacity:1}
+
+/* 모달 */
+.modal{position:fixed;inset:0;background:rgba(20,26,40,.45);display:none;align-items:center;justify-content:center;z-index:40;padding:16px}
+.modal.show{display:flex}
+.modal .card{width:100%;max-width:360px;animation:rise .3s}
+
+/* ===== 관리자 ===== */
+.admin-head{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:16px}
+.admin-head h1{font-size:22px}
+.tools{display:flex;gap:8px;flex-wrap:wrap}
+.tools .btn{background:#fff;border:1px solid var(--line);color:var(--ink)}
+.tools .btn.pri{background:var(--main);color:#fff;border:0;box-shadow:none}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+.kpi{background:#fff;border-radius:14px;padding:14px 16px;box-shadow:var(--shadow)}
+.kpi span{font-size:13px;color:var(--sub)}
+.kpi b{display:block;font-size:26px;font-weight:800;margin-top:2px}
+.panel{background:#fff;border-radius:var(--r);box-shadow:var(--shadow);padding:20px;margin-bottom:16px}
+.panel h2{font-size:17px;font-weight:800;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.panel h2 em{font-style:normal;font-size:12px;color:var(--sub);font-weight:600}
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14px;white-space:nowrap}
+th,td{padding:10px 10px;text-align:center;border-bottom:1px solid var(--line)}
+th{background:#f6f8fc;font-weight:700;color:var(--sub);position:sticky;top:0}
+td.name{text-align:left;font-weight:600}
+tr.total td{font-weight:800;background:#f6f8fc}
+td.zero{color:#c3c9d6}
+.pill{display:inline-block;min-width:44px;padding:3px 10px;border-radius:20px;background:var(--main-soft);color:var(--main);font-weight:800}
+.del{color:#b7bdca;font-size:13px;padding:4px 8px;border-radius:8px}
+.del:hover{color:var(--warn);background:#fdecec}
+.grade-sep td{background:#fbfcfe;font-weight:800;text-align:left;color:var(--main);font-size:13px}
+
+.bars{display:grid;gap:10px}
+.bar{display:grid;grid-template-columns:52px 1fr 64px;align-items:center;gap:10px;font-size:14px}
+.bar b{font-weight:800}
+.bar .track{height:26px;background:#f0f3f9;border-radius:8px;overflow:hidden}
+.bar .fill{height:100%;background:linear-gradient(90deg,#5b82ff,var(--main));border-radius:8px;width:0;transition:width .9s cubic-bezier(.2,.8,.2,1)}
+.bar .v{text-align:right;font-weight:800}
+.bar .v small{color:var(--sub);font-weight:500;margin-left:3px}
+.grid2{display:grid;grid-template-columns:1fr;gap:16px}
+@media(min-width:900px){.grid2{grid-template-columns:1.3fr 1fr}}
+.empty{text-align:center;color:var(--sub);padding:30px 0;font-size:14px}
+.filter{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.filter button{padding:6px 12px;border-radius:20px;border:1px solid var(--line);font-size:13px;font-weight:700;color:var(--sub);background:#fff}
+.filter button.sel{background:var(--ink);color:#fff;border-color:var(--ink)}
+
+/* 불러오는 중 표시 */
+.loadbar{position:fixed;top:0;left:0;right:0;height:3px;z-index:70;overflow:hidden;opacity:0;transition:opacity .2s}
+.loadbar.on{opacity:1}
+.loadbar::after{content:"";position:absolute;top:0;bottom:0;width:40%;background:var(--main);animation:slide 1s infinite ease-in-out}
+@keyframes slide{from{left:-40%}to{left:100%}}
+.loading-note{display:none;font-size:13px;color:var(--main);font-weight:700;margin-left:8px}
+.loading-note.on{display:inline}
+@media print{
+  body{background:#fff}
+  .no-print,.top,.del,.filter{display:none!important}
+  .panel,.kpi{box-shadow:none;border:1px solid #ddd;break-inside:avoid}
+  .wrap.wide{max-width:none;padding:0}
+  th{position:static}
+}
+</style>
+</head>
+<body>
+
+<!-- ===================== 학생 화면 ===================== -->
+<div id="studentApp" class="wrap">
+  <div class="top">
+    <div class="brand">
+      <svg viewBox="0 0 64 64"><path d="M22 8 L8 16 L12 28 L18 26 L18 56 L46 56 L46 26 L52 28 L56 16 L42 8 Q32 16 22 8Z" fill="#2f5bea"/></svg>
+      <span id="brandText">단체티 사이즈 조사</span><span id="modeBadge"></span>
+    </div>
+    <button class="admin-btn" onclick="openPin()">선생님용</button>
+  </div>
+
+  <div class="steps"><i class="on"></i><i></i><i></i></div>
+
+  <!-- STEP 1: 학생 정보 -->
+  <section class="screen show" id="s1">
+    <div class="card">
+      <h1 id="titleText">단체티 사이즈를 알려주세요</h1>
+      <p class="lead">학년 → 반 → 번호 → 이름 순서로 입력하면 다음 단계로 넘어갈 수 있어요.</p>
+
+      <div class="field" id="f-grade">
+        <div class="label"><span class="num">1</span>학년</div>
+        <div class="seg" id="gradeSeg"></div>
+      </div>
+
+      <div class="field locked" id="f-class">
+        <div class="label"><span class="num">2</span>반</div>
+        <input class="inp" id="inClass" type="number" inputmode="numeric" min="1" max="20" placeholder="예) 1">
+        <div class="hint" id="hClass"></div>
+      </div>
+
+      <div class="field locked" id="f-no">
+        <div class="label"><span class="num">3</span>번호</div>
+        <input class="inp" id="inNo" type="number" inputmode="numeric" min="1" max="60" placeholder="예) 7">
+        <div class="hint" id="hNo"></div>
+      </div>
+
+      <div class="field locked" id="f-name">
+        <div class="label"><span class="num">4</span>이름</div>
+        <input class="inp" id="inName" type="text" maxlength="20" placeholder="예) 홍길동" autocomplete="off">
+        <div class="hint" id="hName"></div>
+      </div>
+
+      <div class="actions">
+        <button class="btn pri" id="next1" disabled onclick="go(2)">다음</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 2: 사이즈 선택 -->
+  <section class="screen" id="s2">
+    <div class="card">
+      <h1><span id="whoText"></span><br>티셔츠 사이즈를 골라 주세요</h1>
+      <p class="lead">평소 입는 옷보다 넉넉하게 입고 싶다면 한 치수 크게 골라도 좋아요.</p>
+      <div class="sizes" id="sizeGrid"></div>
+      <div class="actions">
+        <button class="btn ghost" onclick="go(1)">이전</button>
+        <button class="btn pri" id="next2" disabled onclick="go(3)">다음</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 3: 확인 -->
+  <section class="screen" id="s3">
+    <div class="card">
+      <h1>이대로 제출할까요?</h1>
+      <p class="lead">제출 후에도 같은 학년, 반, 번호로 다시 제출하면 사이즈가 새로 바뀌어요.</p>
+      <div class="confirm" id="confirmBox"></div>
+      <div class="actions">
+        <button class="btn ghost" onclick="go(2)">이전</button>
+        <button class="btn pri" id="submitBtn" onclick="submitForm()">제출하기</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 4: 완료 -->
+  <section class="screen" id="s4">
+    <div class="card done-wrap">
+      <svg class="shirt" viewBox="0 0 120 110">
+        <path d="M40 8 L12 22 L20 46 L30 42 L30 102 L90 102 L90 42 L100 46 L108 22 L80 8 Q60 24 40 8Z" fill="#2f5bea"/>
+        <text x="60" y="80" text-anchor="middle" font-size="26" font-weight="800" fill="#fff" id="doneSize">M</text>
+      </svg>
+      <h1 id="doneTitle">제출 완료!</h1>
+      <p class="lead" id="doneMsg"></p>
+      <div class="actions">
+        <button class="btn pri" onclick="resetForm()">처음으로</button>
+      </div>
+    </div>
+  </section>
+
+  <p class="note" id="footNote"></p>
+</div>
+
+<!-- ===================== 관리자 화면 ===================== -->
+<div id="adminApp" class="wrap wide" style="display:none">
+  <div class="admin-head">
+    <div>
+      <h1 id="adminTitle">단체티 사이즈 집계</h1>
+      <p class="lead"><span id="adminSub"></span><span class="loading-note" id="loadingNote">불러오는 중…</span></p>
+    </div>
+    <div class="tools no-print">
+      <button class="btn sm pri" onclick="loadAdmin()">새로고침</button>
+      <button class="btn sm" onclick="downloadCSV()">엑셀(CSV) 저장</button>
+      <button class="btn sm" onclick="window.print()">인쇄</button>
+      <button class="btn sm" onclick="closeAdmin()">학생 화면</button>
+    </div>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="grid2">
+    <div class="panel">
+      <h2>전교 사이즈별 인원</h2>
+      <div class="bars" id="schoolBars"></div>
+    </div>
+    <div class="panel">
+      <h2>학년별 사이즈별 인원</h2>
+      <div class="tbl-wrap"><table id="gradeTable"></table></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>전체 명단 <em>학년 → 반 → 번호 순</em></h2>
+    <div class="filter no-print" id="listFilter"></div>
+    <div class="tbl-wrap"><table id="listTable"></table></div>
+  </div>
+</div>
+
+<!-- 선생님 PIN 모달 -->
+<div class="modal" id="pinModal">
+  <div class="card">
+    <h1 style="font-size:20px">선생님 확인</h1>
+    <p class="lead">관리자 비밀번호를 입력하세요.</p>
+    <input class="inp" id="pinInput" type="password" style="margin-top:16px" placeholder="비밀번호">
+    <div class="hint" id="pinHint"></div>
+    <div class="actions" style="margin-top:12px">
+      <button class="btn ghost" onclick="closePin()">취소</button>
+      <button class="btn pri" onclick="checkPin()">확인</button>
+    </div>
+  </div>
+</div>
+
+<div class="loadbar" id="loadbar"></div>
+<div class="toast" id="toast"></div>
+<canvas class="confetti" id="confetti"></canvas>
+
+<script>
+/* =========================================================
+   ① 설정 — 여기만 바꾸면 됩니다
+   ========================================================= */
+const CONFIG = {
+  // Google Apps Script 웹앱 URL (README 참고). 비워 두면 '이 기기 저장 모드'로 동작
+  API_URL: "https://script.google.com/macros/s/AKfycbwD34NR-c5q_nW42Ghu_9437SoRrAjwD20M020Rvh_1nIaP5Ya2rWqx7WamB9DcOfQ/exec",
+  TITLE: "단체티 사이즈를 알려주세요",
+  BRAND: "단체티 사이즈 조사",
+  GRADES: [1, 2, 3],                     // 학년 선택지
+  MAX_CLASS: 20,                         // 반 최댓값
+  MAX_NO: 60,                            // 번호 최댓값
+  SIZES: [                               // 사이즈 선택지 (라벨, 보조설명)
+    ["S",   "90"],
+    ["M",   "95"],
+    ["L",   "100"],
+    ["XL",  "105"],
+    ["2XL", "110"],
+    ["3XL", "115"],
+    ["4XL", "120"]
+  ],
+  LOCAL_PIN: "1234"                      // 이 기기 저장 모드일 때의 관리자 비밀번호
+};
+
+/* =========================================================
+   ② 상태
+   ========================================================= */
+const state = { grade:null, cls:"", no:"", name:"", size:null };
+let adminKey = "";
+let adminRows = [];
+let listFilter = "all";
+const $ = s => document.querySelector(s);
+const LS_KEY = "tshirt-size-survey-v1";
+
+/* 초기화 */
+document.getElementById("titleText").textContent = CONFIG.TITLE;
+document.getElementById("brandText").textContent = CONFIG.BRAND;
+document.title = CONFIG.BRAND;
+if (!CONFIG.API_URL) {
+  $("#modeBadge").innerHTML = '<span class="mode-badge">이 기기 저장</span>';
+  $("#footNote").textContent = "현재 '이 기기 저장 모드'입니다. 여러 학생이 각자 휴대폰으로 응답하려면 README의 구글 시트 연결을 해 주세요.";
+}
+
+/* 학년 버튼 */
+$("#gradeSeg").style.gridTemplateColumns = `repeat(${CONFIG.GRADES.length},1fr)`;
+$("#gradeSeg").innerHTML = CONFIG.GRADES.map(g => `<button data-g="${g}">${g}학년</button>`).join("");
+$("#gradeSeg").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  state.grade = Number(b.dataset.g);
+  [...$("#gradeSeg").children].forEach(x => x.classList.toggle("sel", x === b));
+  validate();
+  if (!state.cls) setTimeout(() => $("#inClass").focus(), 150);
+});
+
+/* 사이즈 카드 */
+function shirtSVG(scale){
+  const w = 0.78 + scale * 0.04;           // 사이즈가 커질수록 옷도 조금씩 커짐
+  return `<svg viewBox="0 0 100 80"><g transform="translate(50 42) scale(${w}) translate(-50 -42)">
+  <path d="M34 10 L14 20 L20 36 L28 33 L28 74 L72 74 L72 33 L80 36 L86 20 L66 10 Q50 22 34 10Z" fill="currentColor" opacity=".9"/></g></svg>`;
+}
+$("#sizeGrid").innerHTML = CONFIG.SIZES.map(([s, sub], i) => `
+  <button class="size" data-s="${s}" style="color:hsl(${225 - i*4} 75% ${62 - i*3}%)">
+    <span class="chk">✓</span>${shirtSVG(i)}
+    <b style="color:var(--ink)">${s}</b><small>${sub ? sub : ""}</small>
+  </button>`).join("");
+$("#sizeGrid").addEventListener("click", e => {
+  const b = e.target.closest(".size"); if (!b) return;
+  state.size = b.dataset.s;
+  [...$("#sizeGrid").children].forEach(x => { x.classList.toggle("sel", x === b); x.querySelector("b").style.color = x === b ? "var(--main)" : "var(--ink)"; });
+  $("#next2").disabled = false;
+});
+
+/* 순서대로 입력 검증 */
+["#inClass", "#inNo", "#inName"].forEach(id => {
+  $(id).addEventListener("input", validate);
+  $(id).addEventListener("keydown", e => {
+    if (e.key !== "Enter") return;
+    if (id === "#inClass" && okClass()) $("#inNo").focus();
+    else if (id === "#inNo" && okNo()) $("#inName").focus();
+    else if (id === "#inName" && !$("#next1").disabled) go(2);
+  });
+});
+const okGrade = () => state.grade !== null;
+const okClass = () => { const v = Number($("#inClass").value); return Number.isInteger(v) && v >= 1 && v <= CONFIG.MAX_CLASS; };
+const okNo    = () => { const v = Number($("#inNo").value);    return Number.isInteger(v) && v >= 1 && v <= CONFIG.MAX_NO; };
+const okName  = () => { const v = $("#inName").value.trim();   return v.length >= 2 && /^[가-힣a-zA-Z\s]+$/.test(v); };
+
+function validate(){
+  const g = okGrade(), c = okClass(), n = okNo(), nm = okName();
+  setField("#f-grade", true, g);
+  setField("#f-class", g, c);
+  setField("#f-no", g && c, n);
+  setField("#f-name", g && c && n, nm);
+
+  $("#hClass").textContent = $("#inClass").value && !c ? `1~${CONFIG.MAX_CLASS} 사이 숫자를 입력하세요.` : "";
+  $("#hNo").textContent    = $("#inNo").value && !n ? `1~${CONFIG.MAX_NO} 사이 숫자를 입력하세요.` : "";
+  $("#hName").textContent  = $("#inName").value.trim() && !nm ? "이름은 한글 또는 영문 2글자 이상으로 입력하세요." : "";
+
+  $("#next1").disabled = !(g && c && n && nm);
+}
+function setField(id, unlocked, done){
+  $(id).classList.toggle("locked", !unlocked);
+  $(id).classList.toggle("done", unlocked && done);
+  $(id).querySelectorAll("input").forEach(i => i.disabled = !unlocked);
+}
+
+/* 화면 이동 */
+function go(n){
+  if (n >= 2) {
+    state.cls = Number($("#inClass").value);
+    state.no = Number($("#inNo").value);
+    state.name = $("#inName").value.trim().replace(/\s+/g, " ");
+    $("#whoText").textContent = `${state.grade}학년 ${state.cls}반 ${state.no}번 ${state.name}님,`;
+  }
+  if (n === 3) {
+    $("#confirmBox").innerHTML = `
+      <div><span>학년 / 반 / 번호</span><strong>${state.grade}학년 ${state.cls}반 ${state.no}번</strong></div>
+      <div><span>이름</span><strong>${esc(state.name)}</strong></div>
+      <div><span>티셔츠 사이즈</span><strong class="big">${state.size}</strong></div>`;
+  }
+  document.querySelectorAll("#studentApp .screen").forEach((s, i) => s.classList.toggle("show", i === n - 1));
+  document.querySelectorAll(".steps i").forEach((b, i) => b.classList.toggle("on", i < Math.min(n, 3)));
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+/* 제출 */
+async function submitForm(){
+  const btn = $("#submitBtn");
+  btn.disabled = true; btn.textContent = "제출 중…";
+  const rec = { grade: state.grade, cls: state.cls, no: state.no, name: state.name, size: state.size };
+  try {
+    let updated = false;
+    if (CONFIG.API_URL) {
+      const r = await api({ action: "submit", ...rec });
+      if (!r.ok) throw new Error(r.error || "제출 실패");
+      updated = r.updated;
+    } else {
+      const rows = localRows();
+      const i = rows.findIndex(x => x.grade == rec.grade && x.cls == rec.cls && x.no == rec.no);
+      rec.time = new Date().toISOString();
+      if (i >= 0) { rows[i] = rec; updated = true; } else rows.push(rec);
+      localStorage.setItem(LS_KEY, JSON.stringify(rows));
+    }
+    $("#doneSize").textContent = state.size;
+    $("#doneTitle").textContent = updated ? "사이즈가 변경되었어요!" : "제출 완료!";
+    $("#doneMsg").textContent = `${state.grade}학년 ${state.cls}반 ${state.no}번 ${state.name} — ${state.size} 사이즈로 ${updated ? "변경" : "접수"}되었습니다.`;
+    go(4); confetti();
+  } catch (err) {
+    toast("제출하지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.");
+    console.error(err);
+  } finally {
+    btn.disabled = false; btn.textContent = "제출하기";
+  }
+}
+function resetForm(){
+  Object.assign(state, { grade:null, cls:"", no:"", name:"", size:null });
+  $("#inClass").value = $("#inNo").value = $("#inName").value = "";
+  document.querySelectorAll("#gradeSeg button, #sizeGrid .size").forEach(b => b.classList.remove("sel"));
+  document.querySelectorAll("#sizeGrid b").forEach(b => b.style.color = "var(--ink)");
+  $("#next2").disabled = true;
+  validate(); go(1);
+}
+
+/* 통신 */
+let busy = 0;
+function setBusy(d){ busy += d; $("#loadbar").classList.toggle("on", busy > 0); $("#loadingNote").classList.toggle("on", busy > 0); }
+async function api(body){
+  setBusy(1);
+  try {
+  const res = await fetch(CONFIG.API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },   // CORS 사전요청 없이 Apps Script로 전송
+    body: JSON.stringify(body)
+  });
+  return await res.json();
+  } finally { setBusy(-1); }
+}
+function localRows(){ try { return JSON.parse(localStorage.getItem(LS_KEY)) || []; } catch { return []; } }
+
+/* =========================================================
+   ③ 관리자
+   ========================================================= */
+function openPin(){ warmup(); $("#pinModal").classList.add("show"); $("#pinHint").textContent = ""; $("#pinInput").value = ""; setTimeout(() => $("#pinInput").focus(), 100); }
+function closePin(){ $("#pinModal").classList.remove("show"); }
+$("#pinInput").addEventListener("keydown", e => { if (e.key === "Enter") checkPin(); });
+
+async function checkPin(){
+  const pin = $("#pinInput").value;
+  if (!CONFIG.API_URL) {
+    if (pin !== CONFIG.LOCAL_PIN) { $("#pinHint").textContent = "비밀번호가 맞지 않아요."; return; }
+    adminKey = pin; closePin(); showAdmin(); return;
+  }
+  $("#pinHint").textContent = "확인 중…";
+  try {
+    const r = await api({ action: "list", key: pin });
+    if (!r.ok) { $("#pinHint").textContent = "비밀번호가 맞지 않아요."; return; }
+    adminKey = pin; adminRows = r.rows; closePin(); showAdmin(true);
+  } catch { $("#pinHint").textContent = "서버에 연결하지 못했어요."; }
+}
+function showAdmin(loaded){
+  $("#studentApp").style.display = "none";
+  $("#adminApp").style.display = "block";
+  loaded ? renderAdmin() : loadAdmin();
+}
+function closeAdmin(){ $("#adminApp").style.display = "none"; $("#studentApp").style.display = "block"; adminKey = ""; }
+
+async function loadAdmin(){
+  if (CONFIG.API_URL) {
+    try {
+      const r = await api({ action: "list", key: adminKey });
+      if (!r.ok) throw new Error(r.error);
+      adminRows = r.rows;
+    } catch { toast("불러오기에 실패했어요."); return; }
+  } else adminRows = localRows();
+  renderAdmin(); toast("최신 자료를 불러왔어요.");
+}
+
+const sizeList = () => {
+  const base = CONFIG.SIZES.map(s => s[0]);
+  adminRows.forEach(r => { if (!base.includes(r.size)) base.push(r.size); });
+  return base;
+};
+const sortRows = rows => rows.slice().sort((a, b) => a.grade - b.grade || a.cls - b.cls || a.no - b.no);
+
+function renderAdmin(){
+  const rows = sortRows(adminRows);
+  const sizes = sizeList();
+  const grades = [...new Set([...CONFIG.GRADES, ...rows.map(r => Number(r.grade))])].sort((a, b) => a - b);
+  const total = rows.length;
+  const now = new Date();
+  $("#adminSub").textContent = `${now.toLocaleDateString("ko-KR")} ${now.toLocaleTimeString("ko-KR", {hour:"2-digit", minute:"2-digit"})} 기준 · ${CONFIG.API_URL ? "구글 시트 연동" : "이 기기 저장 모드"}`;
+
+  /* KPI */
+  const topSize = sizes.map(s => [s, rows.filter(r => r.size === s).length]).sort((a, b) => b[1] - a[1])[0];
+  $("#kpis").innerHTML =
+    `<div class="kpi"><span>전체 응답</span><b>${total}명</b></div>` +
+    grades.map(g => `<div class="kpi"><span>${g}학년</span><b>${rows.filter(r => r.grade == g).length}명</b></div>`).join("") +
+    `<div class="kpi"><span>가장 많은 사이즈</span><b>${total ? topSize[0] : "-"}</b></div>`;
+
+  /* 전교 막대 */
+  const max = Math.max(1, ...sizes.map(s => rows.filter(r => r.size === s).length));
+  $("#schoolBars").innerHTML = sizes.map(s => {
+    const c = rows.filter(r => r.size === s).length;
+    return `<div class="bar"><b>${s}</b><div class="track"><div class="fill" data-w="${c / max * 100}"></div></div>
+      <div class="v">${c}<small>명</small></div></div>`;
+  }).join("") + `<div class="bar" style="margin-top:4px;border-top:1px solid var(--line);padding-top:10px"><b>합계</b><div></div><div class="v">${total}<small>명</small></div></div>`;
+  requestAnimationFrame(() => requestAnimationFrame(() =>
+    document.querySelectorAll("#schoolBars .fill").forEach(f => f.style.width = f.dataset.w + "%")));
+
+  /* 학년 × 사이즈 표 */
+  const cell = n => `<td class="${n ? "" : "zero"}">${n}</td>`;
+  let h = `<thead><tr><th>학년</th>${sizes.map(s => `<th>${s}</th>`).join("")}<th>합계</th></tr></thead><tbody>`;
+  grades.forEach(g => {
+    const gr = rows.filter(r => r.grade == g);
+    h += `<tr><td><b>${g}학년</b></td>${sizes.map(s => cell(gr.filter(r => r.size === s).length)).join("")}<td><b>${gr.length}</b></td></tr>`;
+  });
+  h += `<tr class="total"><td>전교</td>${sizes.map(s => `<td>${rows.filter(r => r.size === s).length}</td>`).join("")}<td>${total}</td></tr></tbody>`;
+  $("#gradeTable").innerHTML = h;
+
+  /* 필터 */
+  $("#listFilter").innerHTML = [["all", "전체"], ...grades.map(g => [String(g), g + "학년"])]
+    .map(([v, t]) => `<button data-v="${v}" class="${listFilter === v ? "sel" : ""}">${t}</button>`).join("");
+
+  /* 전체 명단 */
+  const shown = listFilter === "all" ? rows : rows.filter(r => String(r.grade) === listFilter);
+  if (!shown.length) { $("#listTable").innerHTML = `<tr><td class="empty">아직 응답이 없어요.</td></tr>`; return; }
+  let t = `<thead><tr><th>학년</th><th>반</th><th>번호</th><th style="text-align:left">이름</th><th>사이즈</th><th>제출 시각</th><th class="no-print"></th></tr></thead><tbody>`;
+  let lastG = null;
+  shown.forEach(r => {
+    if (listFilter === "all" && r.grade !== lastG) { t += `<tr class="grade-sep"><td colspan="7">${r.grade}학년 · ${rows.filter(x => x.grade == r.grade).length}명</td></tr>`; lastG = r.grade; }
+    t += `<tr><td>${r.grade}</td><td>${r.cls}</td><td>${r.no}</td><td class="name">${esc(r.name)}</td>
+      <td><span class="pill">${esc(r.size)}</span></td><td style="color:var(--sub);font-size:13px">${fmtTime(r.time)}</td>
+      <td class="no-print"><button class="del" onclick="delRow(${r.grade},${r.cls},${r.no},'${esc(r.name)}')">삭제</button></td></tr>`;
+  });
+  $("#listTable").innerHTML = t + "</tbody>";
+}
+$("#listFilter").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  listFilter = b.dataset.v; renderAdmin();
+});
+
+async function delRow(g, c, n, name){
+  if (!confirmInline(`${g}학년 ${c}반 ${n}번 ${name} 응답을 삭제할까요?`)) return;
+  if (CONFIG.API_URL) {
+    const r = await api({ action: "delete", key: adminKey, grade: g, cls: c, no: n });
+    if (!r.ok) { toast("삭제하지 못했어요."); return; }
+    adminRows = r.rows;
+  } else {
+    adminRows = localRows().filter(x => !(x.grade == g && x.cls == c && x.no == n));
+    localStorage.setItem(LS_KEY, JSON.stringify(adminRows));
+  }
+  renderAdmin(); toast("삭제했어요.");
+}
+/* 두 번 눌러야 삭제 (브라우저 확인창 대신) */
+let pendingDel = null;
+function confirmInline(msg){
+  if (pendingDel === msg) { pendingDel = null; return true; }
+  pendingDel = msg; toast(msg + " 한 번 더 누르면 삭제됩니다.");
+  setTimeout(() => { if (pendingDel === msg) pendingDel = null; }, 3000);
+  return false;
+}
+
+function downloadCSV(){
+  const rows = sortRows(adminRows), sizes = sizeList();
+  const grades = [...new Set([...CONFIG.GRADES, ...rows.map(r => Number(r.grade))])].sort((a, b) => a - b);
+  const q = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  let out = ["[전체 명단]", "학년,반,번호,이름,사이즈,제출시각"];
+  rows.forEach(r => out.push([r.grade, r.cls, r.no, q(r.name), r.size, q(fmtTime(r.time))].join(",")));
+  out.push("", "[학년별 사이즈별 인원]", ["학년", ...sizes, "합계"].join(","));
+  grades.forEach(g => { const gr = rows.filter(r => r.grade == g); out.push([g + "학년", ...sizes.map(s => gr.filter(r => r.size === s).length), gr.length].join(",")); });
+  out.push(["전교", ...sizes.map(s => rows.filter(r => r.size === s).length), rows.length].join(","));
+  const blob = new Blob(["﻿" + out.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `tshirt_sizes_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+/* =========================================================
+   ④ 유틸
+   ========================================================= */
+function esc(s){ return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c])); }
+function fmtTime(t){ if (!t) return ""; const d = new Date(t); if (isNaN(d)) return String(t);
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; }
+let toastT;
+function toast(m){ const t = $("#toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 2600); }
+
+function confetti(){
+  const cv = $("#confetti"), ctx = cv.getContext("2d");
+  cv.width = innerWidth; cv.height = innerHeight;
+  const colors = ["#2f5bea", "#5b82ff", "#17a673", "#ffb020", "#ff6b8a"];
+  const ps = Array.from({ length: 120 }, () => ({
+    x: cv.width / 2, y: cv.height * 0.35, vx: (Math.random() - .5) * 14, vy: Math.random() * -12 - 4,
+    s: Math.random() * 6 + 4, r: Math.random() * 6, vr: (Math.random() - .5) * .3, c: colors[Math.random() * colors.length | 0]
+  }));
+  let f = 0;
+  (function tick(){
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ps.forEach(p => { p.vy += .35; p.x += p.vx; p.y += p.vy; p.r += p.vr;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.fillStyle = p.c; ctx.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2); ctx.restore(); });
+    if (++f < 110) requestAnimationFrame(tick); else ctx.clearRect(0, 0, cv.width, cv.height);
+  })();
+}
+
+/* 서버 예열: Apps Script는 한동안 안 쓰면 첫 요청이 3~10초 걸림 → 페이지를 열자마자 미리 깨워 둠 */
+function warmup(){ if (CONFIG.API_URL) fetch(CONFIG.API_URL).catch(() => {}); }
+warmup();
+document.addEventListener("visibilitychange", () => { if (!document.hidden) warmup(); });
+
+validate();
+</script>
+</body>
+</html>
