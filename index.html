@@ -154,7 +154,27 @@ td.zero{color:#c3c9d6}
 @keyframes slide{from{left:-40%}to{left:100%}}
 .loading-note{display:none;font-size:13px;color:var(--main);font-weight:700;margin-left:8px}
 .loading-note.on{display:inline}
+/* 팀 배정 */
+.team-seg{display:inline-flex;gap:4px}
+.team-seg button{padding:5px 12px;border-radius:20px;border:1.5px solid var(--line);font-size:13px;font-weight:700;color:var(--sub);background:#fff;transition:.15s}
+.team-seg button:hover{border-color:#c7d1ea}
+.team-seg button.sel{color:#fff;border-color:transparent}
+.tchip{display:inline-flex;align-items:center;gap:6px;font-weight:800}
+.tchip i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.bulk{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:-4px 0 12px;font-size:13px;color:var(--sub)}
+.bulk button{padding:6px 12px;border-radius:10px;border:1px solid var(--line);font-size:13px;font-weight:700;background:#fff}
+.bulk button:hover{background:#f3f5fa}
+.save-state{margin-left:auto;font-size:12px;font-weight:700;color:var(--sub)}
+.save-state.ok{color:var(--ok)} .save-state.err{color:var(--warn)}
+.order-list{display:grid;gap:10px;margin-top:14px}
+.order{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;background:#f6f8fc;font-size:14px}
+.order .txt{flex:1;min-width:200px;line-height:1.6}
+.order button{padding:6px 12px;border-radius:10px;background:#fff;border:1px solid var(--line);font-size:13px;font-weight:700}
+tr.team-row td:first-child{text-align:left}
+.filter .sep{width:1px;background:var(--line);margin:0 4px}
 @media print{
+  .team-seg button:not(.sel){display:none}
+  .order button{display:none}
   body{background:#fff}
   .no-print,.top,.del,.filter{display:none!important}
   .panel,.kpi{box-shadow:none;border:1px solid #ddd;break-inside:avoid}
@@ -284,9 +304,16 @@ td.zero{color:#c3c9d6}
     </div>
   </div>
 
+  <div class="panel" id="teamPanel">
+    <h2>팀별 사이즈 주문 수량 <em>아래 명단에서 학생마다 팀을 골라 주세요</em><span class="save-state" id="saveState"></span></h2>
+    <div class="tbl-wrap"><table id="teamTable"></table></div>
+    <div class="order-list" id="orderList"></div>
+  </div>
+
   <div class="panel">
     <h2>전체 명단 <em>학년 → 반 → 번호 순</em></h2>
     <div class="filter no-print" id="listFilter"></div>
+    <div class="bulk no-print" id="bulkBar"></div>
     <div class="tbl-wrap"><table id="listTable"></table></div>
   </div>
 </div>
@@ -330,6 +357,10 @@ const CONFIG = {
     ["3XL", "115"],
     ["4XL", "120"]
   ],
+  TEAMS: [                               // 팀 이름과 색 (선생님 화면에서 학생마다 배정)
+    ["두레", "#2f5bea"],
+    ["자연", "#17a673"]
+  ],
   LOCAL_PIN: "1234"                      // 이 기기 저장 모드일 때의 관리자 비밀번호
 };
 
@@ -340,6 +371,7 @@ const state = { grade:null, cls:"", no:"", name:"", size:null };
 let adminKey = "";
 let adminRows = [];
 let listFilter = "all";
+let teamFilter = "all";
 const $ = s => document.querySelector(s);
 const LS_KEY = "tshirt-size-survey-v1";
 
@@ -449,7 +481,7 @@ async function submitForm(){
       const rows = localRows();
       const i = rows.findIndex(x => x.grade == rec.grade && x.cls == rec.cls && x.no == rec.no);
       rec.time = new Date().toISOString();
-      if (i >= 0) { rows[i] = rec; updated = true; } else rows.push(rec);
+      if (i >= 0) { rec.team = rows[i].team || ""; rows[i] = rec; updated = true; } else rows.push(rec);
       localStorage.setItem(LS_KEY, JSON.stringify(rows));
     }
     $("#doneSize").textContent = state.size;
@@ -513,9 +545,10 @@ function showAdmin(loaded){
   $("#adminApp").style.display = "block";
   loaded ? renderAdmin() : loadAdmin();
 }
-function closeAdmin(){ $("#adminApp").style.display = "none"; $("#studentApp").style.display = "block"; adminKey = ""; }
+function closeAdmin(){ if (Object.keys(pendingTeams).length) { clearTimeout(saveTimer); saveTeams(); } $("#adminApp").style.display = "none"; $("#studentApp").style.display = "block"; adminKey = ""; }
 
 async function loadAdmin(){
+  if (Object.keys(pendingTeams).length) { clearTimeout(saveTimer); await saveTeams(); }
   if (CONFIG.API_URL) {
     try {
       const r = await api({ action: "list", key: adminKey });
@@ -568,26 +601,124 @@ function renderAdmin(){
   h += `<tr class="total"><td>전교</td>${sizes.map(s => `<td>${rows.filter(r => r.size === s).length}</td>`).join("")}<td>${total}</td></tr></tbody>`;
   $("#gradeTable").innerHTML = h;
 
-  /* 필터 */
-  $("#listFilter").innerHTML = [["all", "전체"], ...grades.map(g => [String(g), g + "학년"])]
-    .map(([v, t]) => `<button data-v="${v}" class="${listFilter === v ? "sel" : ""}">${t}</button>`).join("");
+  /* 팀 × 사이즈 표 + 주문 문구 */
+  renderTeams(rows, sizes);
+
+  /* 필터 (학년 | 팀) */
+  $("#listFilter").innerHTML =
+    [["all", "전체"], ...grades.map(g => [String(g), g + "학년"])]
+      .map(([v, t]) => `<button data-v="${v}" class="${listFilter === v ? "sel" : ""}">${t}</button>`).join("") +
+    `<span class="sep"></span>` +
+    [["all", "모든 팀"], ...TEAMS.map(([n]) => [n, n + "팀"]), ["", "미배정"]]
+      .map(([v, t]) => `<button data-tf="${v}" class="${teamFilter === v ? "sel" : ""}">${t}</button>`).join("");
 
   /* 전체 명단 */
-  const shown = listFilter === "all" ? rows : rows.filter(r => String(r.grade) === listFilter);
-  if (!shown.length) { $("#listTable").innerHTML = `<tr><td class="empty">아직 응답이 없어요.</td></tr>`; return; }
-  let t = `<thead><tr><th>학년</th><th>반</th><th>번호</th><th style="text-align:left">이름</th><th>사이즈</th><th>제출 시각</th><th class="no-print"></th></tr></thead><tbody>`;
+  const shown = visibleRows();
+  $("#bulkBar").innerHTML = shown.length ? `지금 보이는 ${shown.length}명을
+    ${TEAMS.map(([n, c]) => `<button data-bulk="${n}" style="color:${c}">모두 ${n}팀</button>`).join("")}
+    <button data-bulk="">배정 해제</button>` : "";
+  if (!shown.length) { $("#listTable").innerHTML = `<tr><td class="empty">${rows.length ? "조건에 맞는 학생이 없어요." : "아직 응답이 없어요."}</td></tr>`; return; }
+  let t = `<thead><tr><th>학년</th><th>반</th><th>번호</th><th style="text-align:left">이름</th><th>사이즈</th><th>팀</th><th>제출 시각</th><th class="no-print"></th></tr></thead><tbody>`;
   let lastG = null;
   shown.forEach(r => {
-    if (listFilter === "all" && r.grade !== lastG) { t += `<tr class="grade-sep"><td colspan="7">${r.grade}학년 · ${rows.filter(x => x.grade == r.grade).length}명</td></tr>`; lastG = r.grade; }
+    if (listFilter === "all" && r.grade !== lastG) { t += `<tr class="grade-sep"><td colspan="8">${r.grade}학년 · ${shown.filter(x => x.grade == r.grade).length}명</td></tr>`; lastG = r.grade; }
+    const k = keyOf(r);
     t += `<tr><td>${r.grade}</td><td>${r.cls}</td><td>${r.no}</td><td class="name">${esc(r.name)}</td>
-      <td><span class="pill">${esc(r.size)}</span></td><td style="color:var(--sub);font-size:13px">${fmtTime(r.time)}</td>
+      <td><span class="pill">${esc(r.size)}</span></td>
+      <td><span class="team-seg">${TEAMS.map(([n, c]) => `<button data-k="${k}" data-team="${n}" class="${r.team === n ? "sel" : ""}" style="${r.team === n ? `background:${c}` : ""}">${n}</button>`).join("")}</span></td>
+      <td style="color:var(--sub);font-size:13px">${fmtTime(r.time)}</td>
       <td class="no-print"><button class="del" onclick="delRow(${r.grade},${r.cls},${r.no},'${esc(r.name)}')">삭제</button></td></tr>`;
   });
   $("#listTable").innerHTML = t + "</tbody>";
 }
+
+/* ===== 팀 배정 ===== */
+const TEAMS = CONFIG.TEAMS;
+const keyOf = r => `${r.grade}-${r.cls}-${r.no}`;
+const teamColor = n => (TEAMS.find(t => t[0] === n) || [, "#9aa3b5"])[1];
+function visibleRows(){
+  return sortRows(adminRows).filter(r =>
+    (listFilter === "all" || String(r.grade) === listFilter) &&
+    (teamFilter === "all" || (r.team || "") === teamFilter));
+}
+
+function renderTeams(rows, sizes){
+  const groups = [...TEAMS.map(([n, c]) => [n + "팀", c, rows.filter(r => r.team === n)]),
+                  ["미배정", "#b7bdca", rows.filter(r => !TEAMS.some(([n]) => n === r.team))]];
+  const cell = n => `<td class="${n ? "" : "zero"}">${n}</td>`;
+  let h = `<thead><tr><th style="text-align:left">팀</th>${sizes.map(s => `<th>${s}</th>`).join("")}<th>합계</th></tr></thead><tbody>`;
+  groups.forEach(([label, color, list]) => {
+    if (label === "미배정" && !list.length) return;
+    h += `<tr class="team-row"><td><span class="tchip"><i style="background:${color}"></i>${label}</span></td>
+      ${sizes.map(s => cell(list.filter(r => r.size === s).length)).join("")}<td><b>${list.length}</b></td></tr>`;
+  });
+  h += `<tr class="total"><td style="text-align:left">전체</td>${sizes.map(s => `<td>${rows.filter(r => r.size === s).length}</td>`).join("")}<td>${rows.length}</td></tr></tbody>`;
+  $("#teamTable").innerHTML = h;
+
+  const un = groups[groups.length - 1][2].length;
+  $("#orderList").innerHTML = groups.slice(0, TEAMS.length).map(([label, color, list], i) => {
+    const txt = orderText(label, list, sizes);
+    return `<div class="order"><span class="tchip"><i style="background:${color}"></i>${label}</span>
+      <span class="txt">${esc(txt.replace(label + " — ", ""))}</span><button data-copy="${i}">주문 문구 복사</button></div>`;
+  }).join("") + (un ? `<div class="order" style="background:#fff4dc;color:#a36a00">아직 팀이 정해지지 않은 학생이 ${un}명 있어요. 명단에서 "미배정"을 눌러 확인하세요.</div>` : "");
+}
+function orderText(label, list, sizes){
+  const parts = sizes.map(s => [s, list.filter(r => r.size === s).length]).filter(([, n]) => n);
+  return `${label} — ${parts.length ? parts.map(([s, n]) => `${s} ${n}장`).join(", ") : "없음"} (총 ${list.length}장)`;
+}
+
+/* 명단 클릭: 팀 선택 / 일괄 배정 / 필터 */
+$("#listTable").addEventListener("click", e => {
+  const b = e.target.closest("button[data-team]"); if (!b) return;
+  const r = adminRows.find(x => keyOf(x) === b.dataset.k); if (!r) return;
+  setTeams([b.dataset.k], r.team === b.dataset.team ? "" : b.dataset.team);   // 다시 누르면 해제
+});
+$("#bulkBar").addEventListener("click", e => {
+  const b = e.target.closest("button[data-bulk]"); if (!b) return;
+  setTeams(visibleRows().map(keyOf), b.dataset.bulk);
+  toast(b.dataset.bulk ? `${b.dataset.bulk}팀으로 배정했어요.` : "배정을 해제했어요.");
+});
+$("#orderList").addEventListener("click", async e => {
+  const b = e.target.closest("button[data-copy]"); if (!b) return;
+  const [n] = TEAMS[Number(b.dataset.copy)];
+  const txt = orderText(n + "팀", adminRows.filter(r => r.team === n), sizeList());
+  try { await navigator.clipboard.writeText(txt); toast("복사했어요: " + txt); } catch { toast(txt); }
+});
+
+/* 저장: 여러 번 눌러도 0.8초 뒤 한 번에 저장 */
+let pendingTeams = {}, saveTimer = null;
+function setTeams(keys, team){
+  keys.forEach(k => { const r = adminRows.find(x => keyOf(x) === k); if (r) { r.team = team; pendingTeams[k] = team; } });
+  renderAdmin();
+  setSave("저장 대기…");
+  clearTimeout(saveTimer); saveTimer = setTimeout(saveTeams, 800);
+}
+function setSave(t, cls){ const el = $("#saveState"); el.textContent = t; el.className = "save-state" + (cls ? " " + cls : ""); }
+async function saveTeams(){
+  const batch = pendingTeams; pendingTeams = {};
+  if (!Object.keys(batch).length) return;
+  setSave("저장 중…");
+  try {
+    if (CONFIG.API_URL) {
+      const r = await api({ action: "setTeams", key: adminKey, teams: batch });
+      if (!r.ok) throw new Error(r.error);
+    } else {
+      const rows = localRows();
+      rows.forEach(x => { const k = keyOf(x); if (k in batch) x.team = batch[k]; });
+      localStorage.setItem(LS_KEY, JSON.stringify(rows));
+    }
+    if (!Object.keys(pendingTeams).length) setSave("저장됨 ✓", "ok");
+  } catch {
+    pendingTeams = { ...batch, ...pendingTeams };
+    setSave("저장 실패 · 3초 뒤 다시 시도", "err");
+    clearTimeout(saveTimer); saveTimer = setTimeout(saveTeams, 3000);
+  }
+}
+window.addEventListener("beforeunload", e => { if (Object.keys(pendingTeams).length) { e.preventDefault(); e.returnValue = ""; } });
 $("#listFilter").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
-  listFilter = b.dataset.v; renderAdmin();
+  if (b.dataset.tf !== undefined) teamFilter = b.dataset.tf; else listFilter = b.dataset.v;
+  renderAdmin();
 });
 
 async function delRow(g, c, n, name){
@@ -615,8 +746,11 @@ function downloadCSV(){
   const rows = sortRows(adminRows), sizes = sizeList();
   const grades = [...new Set([...CONFIG.GRADES, ...rows.map(r => Number(r.grade))])].sort((a, b) => a - b);
   const q = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  let out = ["[전체 명단]", "학년,반,번호,이름,사이즈,제출시각"];
-  rows.forEach(r => out.push([r.grade, r.cls, r.no, q(r.name), r.size, q(fmtTime(r.time))].join(",")));
+  let out = ["[전체 명단]", "학년,반,번호,이름,사이즈,팀,제출시각"];
+  rows.forEach(r => out.push([r.grade, r.cls, r.no, q(r.name), r.size, q(r.team || "미배정"), q(fmtTime(r.time))].join(",")));
+  out.push("", "[팀별 사이즈별 수량]", ["팀", ...sizes, "합계"].join(","));
+  [...TEAMS.map(([n]) => [n + "팀", rows.filter(r => r.team === n)]), ["미배정", rows.filter(r => !TEAMS.some(([n]) => n === r.team))]]
+    .forEach(([label, list]) => out.push([label, ...sizes.map(s => list.filter(r => r.size === s).length), list.length].join(",")));
   out.push("", "[학년별 사이즈별 인원]", ["학년", ...sizes, "합계"].join(","));
   grades.forEach(g => { const gr = rows.filter(r => r.grade == g); out.push([g + "학년", ...sizes.map(s => gr.filter(r => r.size === s).length), gr.length].join(",")); });
   out.push(["전교", ...sizes.map(s => rows.filter(r => r.size === s).length), rows.length].join(","));
