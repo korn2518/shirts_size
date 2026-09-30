@@ -48,6 +48,8 @@ h1{font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1.35}
 /* 입력 */
 .field{margin-top:22px;transition:opacity .3s}
 .field.locked{opacity:.35;pointer-events:none}
+.field.hide{display:none}
+.seg button.t-btn.sel{border-color:#17a673;background:#e7f6ef;color:#17a673}
 .label{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;margin-bottom:10px}
 .num{width:22px;height:22px;border-radius:50%;background:var(--line);color:var(--sub);font-size:12px;display:grid;place-items:center;transition:.3s}
 .field.done .num{background:var(--main);color:#fff}
@@ -201,10 +203,10 @@ tr.team-row td:first-child{text-align:left}
   <section class="screen show" id="s1">
     <div class="card">
       <h1 id="titleText">단체티 사이즈를 알려주세요</h1>
-      <p class="lead">학년 → 반 → 번호 → 이름 순서로 입력하면 다음 단계로 넘어갈 수 있어요.</p>
+      <p class="lead" id="leadText">학년 → 반 → 번호 → 이름 순서로 입력하면 다음 단계로 넘어갈 수 있어요.<br>선생님은 "교사"를 누르고 이름만 입력하세요.</p>
 
       <div class="field" id="f-grade">
-        <div class="label"><span class="num">1</span>학년</div>
+        <div class="label"><span class="num">1</span>구분</div>
         <div class="seg" id="gradeSeg"></div>
       </div>
 
@@ -221,7 +223,7 @@ tr.team-row td:first-child{text-align:left}
       </div>
 
       <div class="field locked" id="f-name">
-        <div class="label"><span class="num">4</span>이름</div>
+        <div class="label"><span class="num" id="nameNum">4</span>이름</div>
         <input class="inp" id="inName" type="text" maxlength="20" placeholder="예) 홍길동" autocomplete="off">
         <div class="hint" id="hName"></div>
       </div>
@@ -295,11 +297,11 @@ tr.team-row td:first-child{text-align:left}
 
   <div class="grid2">
     <div class="panel">
-      <h2>전교 사이즈별 인원</h2>
+      <h2>전체 사이즈별 인원</h2>
       <div class="bars" id="schoolBars"></div>
     </div>
     <div class="panel">
-      <h2>학년별 사이즈별 인원</h2>
+      <h2>교사·학년별 사이즈별 인원</h2>
       <div class="tbl-wrap"><table id="gradeTable"></table></div>
     </div>
   </div>
@@ -311,7 +313,7 @@ tr.team-row td:first-child{text-align:left}
   </div>
 
   <div class="panel">
-    <h2>전체 명단 <em>학년 → 반 → 번호 순</em></h2>
+    <h2>전체 명단 <em>교사 → 학년 → 반 → 번호 순</em></h2>
     <div class="filter no-print" id="listFilter"></div>
     <div class="bulk no-print" id="bulkBar"></div>
     <div class="tbl-wrap"><table id="listTable"></table></div>
@@ -345,6 +347,7 @@ const CONFIG = {
   API_URL: "https://script.google.com/macros/s/AKfycbwD34NR-c5q_nW42Ghu_9437SoRrAjwD20M020Rvh_1nIaP5Ya2rWqx7WamB9DcOfQ/exec",
   TITLE: "단체티 사이즈를 알려주세요",
   BRAND: "단체티 사이즈 조사",
+  TEACHER_TAB: true,                     // 맨 앞에 "교사" 버튼 표시 (이름, 사이즈만 입력)
   GRADES: [1, 2, 3],                     // 학년 선택지
   MAX_CLASS: 20,                         // 반 최댓값
   MAX_NO: 60,                            // 번호 최댓값
@@ -385,14 +388,25 @@ if (!CONFIG.API_URL) {
 }
 
 /* 학년 버튼 */
-$("#gradeSeg").style.gridTemplateColumns = `repeat(${CONFIG.GRADES.length},1fr)`;
-$("#gradeSeg").innerHTML = CONFIG.GRADES.map(g => `<button data-g="${g}">${g}학년</button>`).join("");
+/* 교사는 grade = 0 (반, 번호 없음). 교사의 고유키는 이름 */
+const keyOf = r => Number(r.grade) === 0 ? "t:" + String(r.name).trim() : `${r.grade}-${r.cls}-${r.no}`;
+const TEACHER = 0;
+const isTeacher = g => Number(g) === TEACHER;
+const gradeLabel = g => isTeacher(g) ? "교사" : g + "학년";
+const segItems = [...(CONFIG.TEACHER_TAB ? [TEACHER] : []), ...CONFIG.GRADES];
+$("#gradeSeg").style.gridTemplateColumns = `repeat(${segItems.length},1fr)`;
+$("#gradeSeg").innerHTML = segItems.map(g => `<button data-g="${g}" class="${isTeacher(g) ? "t-btn" : ""}">${gradeLabel(g)}</button>`).join("");
 $("#gradeSeg").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
   state.grade = Number(b.dataset.g);
   [...$("#gradeSeg").children].forEach(x => x.classList.toggle("sel", x === b));
+  const t = isTeacher(state.grade);
+  $("#f-class").classList.toggle("hide", t);
+  $("#f-no").classList.toggle("hide", t);
+  $("#nameNum").textContent = t ? "2" : "4";
   validate();
-  if (!state.cls) setTimeout(() => $("#inClass").focus(), 150);
+  if (t) setTimeout(() => $("#inName").focus(), 150);
+  else if (!$("#inClass").value) setTimeout(() => $("#inClass").focus(), 150);
 });
 
 /* 사이즈 카드 */
@@ -429,7 +443,8 @@ const okNo    = () => { const v = Number($("#inNo").value);    return Number.isI
 const okName  = () => { const v = $("#inName").value.trim();   return v.length >= 2 && /^[가-힣a-zA-Z\s]+$/.test(v); };
 
 function validate(){
-  const g = okGrade(), c = okClass(), n = okNo(), nm = okName();
+  const t = isTeacher(state.grade);
+  const g = okGrade(), c = t || okClass(), n = t || okNo(), nm = okName();
   setField("#f-grade", true, g);
   setField("#f-class", g, c);
   setField("#f-no", g && c, n);
@@ -450,14 +465,15 @@ function setField(id, unlocked, done){
 /* 화면 이동 */
 function go(n){
   if (n >= 2) {
-    state.cls = Number($("#inClass").value);
-    state.no = Number($("#inNo").value);
+    const t = isTeacher(state.grade);
+    state.cls = t ? 0 : Number($("#inClass").value);
+    state.no = t ? 0 : Number($("#inNo").value);
     state.name = $("#inName").value.trim().replace(/\s+/g, " ");
-    $("#whoText").textContent = `${state.grade}학년 ${state.cls}반 ${state.no}번 ${state.name}님,`;
+    $("#whoText").textContent = `${whoLabel(state)}${t ? "" : "님"},`;
   }
   if (n === 3) {
     $("#confirmBox").innerHTML = `
-      <div><span>학년 / 반 / 번호</span><strong>${state.grade}학년 ${state.cls}반 ${state.no}번</strong></div>
+      <div><span>${isTeacher(state.grade) ? "구분" : "학년 / 반 / 번호"}</span><strong>${isTeacher(state.grade) ? "교사" : `${state.grade}학년 ${state.cls}반 ${state.no}번`}</strong></div>
       <div><span>이름</span><strong>${esc(state.name)}</strong></div>
       <div><span>티셔츠 사이즈</span><strong class="big">${state.size}</strong></div>`;
   }
@@ -479,14 +495,14 @@ async function submitForm(){
       updated = r.updated;
     } else {
       const rows = localRows();
-      const i = rows.findIndex(x => x.grade == rec.grade && x.cls == rec.cls && x.no == rec.no);
+      const i = rows.findIndex(x => keyOf(x) === keyOf(rec));
       rec.time = new Date().toISOString();
       if (i >= 0) { rec.team = rows[i].team || ""; rows[i] = rec; updated = true; } else rows.push(rec);
       localStorage.setItem(LS_KEY, JSON.stringify(rows));
     }
     $("#doneSize").textContent = state.size;
     $("#doneTitle").textContent = updated ? "사이즈가 변경되었어요!" : "제출 완료!";
-    $("#doneMsg").textContent = `${state.grade}학년 ${state.cls}반 ${state.no}번 ${state.name} — ${state.size} 사이즈로 ${updated ? "변경" : "접수"}되었습니다.`;
+    $("#doneMsg").textContent = `${whoLabel(state)} — ${state.size} 사이즈로 ${updated ? "변경" : "접수"}되었습니다.`;
     go(4); confetti();
   } catch (err) {
     toast("제출하지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.");
@@ -495,10 +511,12 @@ async function submitForm(){
     btn.disabled = false; btn.textContent = "제출하기";
   }
 }
+function whoLabel(r){ return isTeacher(r.grade) ? `${r.name} 선생님` : `${r.grade}학년 ${r.cls}반 ${r.no}번 ${r.name}`; }
 function resetForm(){
   Object.assign(state, { grade:null, cls:"", no:"", name:"", size:null });
   $("#inClass").value = $("#inNo").value = $("#inName").value = "";
   document.querySelectorAll("#gradeSeg button, #sizeGrid .size").forEach(b => b.classList.remove("sel"));
+  $("#f-class").classList.remove("hide"); $("#f-no").classList.remove("hide"); $("#nameNum").textContent = "4";
   document.querySelectorAll("#sizeGrid b").forEach(b => b.style.color = "var(--ink)");
   $("#next2").disabled = true;
   validate(); go(1);
@@ -564,12 +582,13 @@ const sizeList = () => {
   adminRows.forEach(r => { if (!base.includes(r.size)) base.push(r.size); });
   return base;
 };
-const sortRows = rows => rows.slice().sort((a, b) => a.grade - b.grade || a.cls - b.cls || a.no - b.no);
+const sortRows = rows => rows.slice().sort((a, b) => a.grade - b.grade || a.cls - b.cls || a.no - b.no || String(a.name).localeCompare(String(b.name), "ko"));
+const allGrades = rows => [...new Set([...(CONFIG.TEACHER_TAB ? [TEACHER] : []), ...CONFIG.GRADES, ...rows.map(r => Number(r.grade))])].sort((a, b) => a - b);
 
 function renderAdmin(){
   const rows = sortRows(adminRows);
   const sizes = sizeList();
-  const grades = [...new Set([...CONFIG.GRADES, ...rows.map(r => Number(r.grade))])].sort((a, b) => a - b);
+  const grades = allGrades(rows);
   const total = rows.length;
   const now = new Date();
   $("#adminSub").textContent = `${now.toLocaleDateString("ko-KR")} ${now.toLocaleTimeString("ko-KR", {hour:"2-digit", minute:"2-digit"})} 기준 · ${CONFIG.API_URL ? "구글 시트 연동" : "이 기기 저장 모드"}`;
@@ -578,7 +597,7 @@ function renderAdmin(){
   const topSize = sizes.map(s => [s, rows.filter(r => r.size === s).length]).sort((a, b) => b[1] - a[1])[0];
   $("#kpis").innerHTML =
     `<div class="kpi"><span>전체 응답</span><b>${total}명</b></div>` +
-    grades.map(g => `<div class="kpi"><span>${g}학년</span><b>${rows.filter(r => r.grade == g).length}명</b></div>`).join("") +
+    grades.map(g => `<div class="kpi"><span>${gradeLabel(g)}</span><b>${rows.filter(r => r.grade == g).length}명</b></div>`).join("") +
     `<div class="kpi"><span>가장 많은 사이즈</span><b>${total ? topSize[0] : "-"}</b></div>`;
 
   /* 전교 막대 */
@@ -593,12 +612,12 @@ function renderAdmin(){
 
   /* 학년 × 사이즈 표 */
   const cell = n => `<td class="${n ? "" : "zero"}">${n}</td>`;
-  let h = `<thead><tr><th>학년</th>${sizes.map(s => `<th>${s}</th>`).join("")}<th>합계</th></tr></thead><tbody>`;
+  let h = `<thead><tr><th>구분</th>${sizes.map(s => `<th>${s}</th>`).join("")}<th>합계</th></tr></thead><tbody>`;
   grades.forEach(g => {
     const gr = rows.filter(r => r.grade == g);
-    h += `<tr><td><b>${g}학년</b></td>${sizes.map(s => cell(gr.filter(r => r.size === s).length)).join("")}<td><b>${gr.length}</b></td></tr>`;
+    h += `<tr><td><b>${gradeLabel(g)}</b></td>${sizes.map(s => cell(gr.filter(r => r.size === s).length)).join("")}<td><b>${gr.length}</b></td></tr>`;
   });
-  h += `<tr class="total"><td>전교</td>${sizes.map(s => `<td>${rows.filter(r => r.size === s).length}</td>`).join("")}<td>${total}</td></tr></tbody>`;
+  h += `<tr class="total"><td>전체</td>${sizes.map(s => `<td>${rows.filter(r => r.size === s).length}</td>`).join("")}<td>${total}</td></tr></tbody>`;
   $("#gradeTable").innerHTML = h;
 
   /* 팀 × 사이즈 표 + 주문 문구 */
@@ -606,7 +625,7 @@ function renderAdmin(){
 
   /* 필터 (학년 | 팀) */
   $("#listFilter").innerHTML =
-    [["all", "전체"], ...grades.map(g => [String(g), g + "학년"])]
+    [["all", "전체"], ...grades.map(g => [String(g), gradeLabel(g)])]
       .map(([v, t]) => `<button data-v="${v}" class="${listFilter === v ? "sel" : ""}">${t}</button>`).join("") +
     `<span class="sep"></span>` +
     [["all", "모든 팀"], ...TEAMS.map(([n]) => [n, n + "팀"]), ["", "미배정"]]
@@ -621,20 +640,21 @@ function renderAdmin(){
   let t = `<thead><tr><th>학년</th><th>반</th><th>번호</th><th style="text-align:left">이름</th><th>사이즈</th><th>팀</th><th>제출 시각</th><th class="no-print"></th></tr></thead><tbody>`;
   let lastG = null;
   shown.forEach(r => {
-    if (listFilter === "all" && r.grade !== lastG) { t += `<tr class="grade-sep"><td colspan="8">${r.grade}학년 · ${shown.filter(x => x.grade == r.grade).length}명</td></tr>`; lastG = r.grade; }
+    if (listFilter === "all" && r.grade !== lastG) { t += `<tr class="grade-sep"><td colspan="8">${gradeLabel(r.grade)} · ${shown.filter(x => x.grade == r.grade).length}명</td></tr>`; lastG = r.grade; }
     const k = keyOf(r);
-    t += `<tr><td>${r.grade}</td><td>${r.cls}</td><td>${r.no}</td><td class="name">${esc(r.name)}</td>
+    const T = isTeacher(r.grade);
+    t += `<tr><td>${T ? "교사" : r.grade}</td><td>${T ? "-" : r.cls}</td><td>${T ? "-" : r.no}</td><td class="name">${esc(r.name)}</td>
       <td><span class="pill">${esc(r.size)}</span></td>
       <td><span class="team-seg">${TEAMS.map(([n, c]) => `<button data-k="${k}" data-team="${n}" class="${r.team === n ? "sel" : ""}" style="${r.team === n ? `background:${c}` : ""}">${n}</button>`).join("")}</span></td>
       <td style="color:var(--sub);font-size:13px">${fmtTime(r.time)}</td>
-      <td class="no-print"><button class="del" onclick="delRow(${r.grade},${r.cls},${r.no},'${esc(r.name)}')">삭제</button></td></tr>`;
+      <td class="no-print"><button class="del" data-del="${esc(k)}">삭제</button></td></tr>`;
   });
   $("#listTable").innerHTML = t + "</tbody>";
 }
 
 /* ===== 팀 배정 ===== */
 const TEAMS = CONFIG.TEAMS;
-const keyOf = r => `${r.grade}-${r.cls}-${r.no}`;
+
 const teamColor = n => (TEAMS.find(t => t[0] === n) || [, "#9aa3b5"])[1];
 function visibleRows(){
   return sortRows(adminRows).filter(r =>
@@ -660,7 +680,7 @@ function renderTeams(rows, sizes){
     const txt = orderText(label, list, sizes);
     return `<div class="order"><span class="tchip"><i style="background:${color}"></i>${label}</span>
       <span class="txt">${esc(txt.replace(label + " — ", ""))}</span><button data-copy="${i}">주문 문구 복사</button></div>`;
-  }).join("") + (un ? `<div class="order" style="background:#fff4dc;color:#a36a00">아직 팀이 정해지지 않은 학생이 ${un}명 있어요. 명단에서 "미배정"을 눌러 확인하세요.</div>` : "");
+  }).join("") + (un ? `<div class="order" style="background:#fff4dc;color:#a36a00">아직 팀이 정해지지 않은 사람이 ${un}명 있어요. 명단에서 "미배정"을 눌러 확인하세요.</div>` : "");
 }
 function orderText(label, list, sizes){
   const parts = sizes.map(s => [s, list.filter(r => r.size === s).length]).filter(([, n]) => n);
@@ -721,14 +741,18 @@ $("#listFilter").addEventListener("click", e => {
   renderAdmin();
 });
 
-async function delRow(g, c, n, name){
-  if (!confirmInline(`${g}학년 ${c}반 ${n}번 ${name} 응답을 삭제할까요?`)) return;
+$("#listTable").addEventListener("click", e => {
+  const b = e.target.closest("button[data-del]"); if (b) delRow(b.dataset.del);
+});
+async function delRow(id){
+  const r0 = adminRows.find(x => keyOf(x) === id); if (!r0) return;
+  if (!confirmInline(`${whoLabel(r0)} 응답을 삭제할까요?`)) return;
   if (CONFIG.API_URL) {
-    const r = await api({ action: "delete", key: adminKey, grade: g, cls: c, no: n });
+    const r = await api({ action: "delete", key: adminKey, id });
     if (!r.ok) { toast("삭제하지 못했어요."); return; }
     adminRows = r.rows;
   } else {
-    adminRows = localRows().filter(x => !(x.grade == g && x.cls == c && x.no == n));
+    adminRows = localRows().filter(x => keyOf(x) !== id);
     localStorage.setItem(LS_KEY, JSON.stringify(adminRows));
   }
   renderAdmin(); toast("삭제했어요.");
@@ -744,16 +768,16 @@ function confirmInline(msg){
 
 function downloadCSV(){
   const rows = sortRows(adminRows), sizes = sizeList();
-  const grades = [...new Set([...CONFIG.GRADES, ...rows.map(r => Number(r.grade))])].sort((a, b) => a - b);
+  const grades = allGrades(rows);
   const q = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
   let out = ["[전체 명단]", "학년,반,번호,이름,사이즈,팀,제출시각"];
-  rows.forEach(r => out.push([r.grade, r.cls, r.no, q(r.name), r.size, q(r.team || "미배정"), q(fmtTime(r.time))].join(",")));
+  rows.forEach(r => out.push([isTeacher(r.grade) ? "교사" : r.grade, isTeacher(r.grade) ? "" : r.cls, isTeacher(r.grade) ? "" : r.no, q(r.name), r.size, q(r.team || "미배정"), q(fmtTime(r.time))].join(",")));
   out.push("", "[팀별 사이즈별 수량]", ["팀", ...sizes, "합계"].join(","));
   [...TEAMS.map(([n]) => [n + "팀", rows.filter(r => r.team === n)]), ["미배정", rows.filter(r => !TEAMS.some(([n]) => n === r.team))]]
     .forEach(([label, list]) => out.push([label, ...sizes.map(s => list.filter(r => r.size === s).length), list.length].join(",")));
-  out.push("", "[학년별 사이즈별 인원]", ["학년", ...sizes, "합계"].join(","));
-  grades.forEach(g => { const gr = rows.filter(r => r.grade == g); out.push([g + "학년", ...sizes.map(s => gr.filter(r => r.size === s).length), gr.length].join(",")); });
-  out.push(["전교", ...sizes.map(s => rows.filter(r => r.size === s).length), rows.length].join(","));
+  out.push("", "[구분별 사이즈별 인원]", ["구분", ...sizes, "합계"].join(","));
+  grades.forEach(g => { const gr = rows.filter(r => r.grade == g); out.push([gradeLabel(g), ...sizes.map(s => gr.filter(r => r.size === s).length), gr.length].join(",")); });
+  out.push(["전체", ...sizes.map(s => rows.filter(r => r.size === s).length), rows.length].join(","));
   const blob = new Blob(["﻿" + out.join("\r\n")], { type: "text/csv;charset=utf-8" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
